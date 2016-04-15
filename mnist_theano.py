@@ -14,7 +14,7 @@ import numpy as np
 # Load the dataset
 print 'Reading data from train.csv...'
 import csv
-with open('train.csv','r') as dest_f:
+with open('data/train.csv','r') as dest_f:
     data_iter = csv.reader(dest_f, 
                            delimiter = ',', 
                            quotechar = '"')
@@ -29,7 +29,7 @@ test_set = (train_data_array[30000:,:-1], np.asarray(train_data_array[30000:,-1]
 
 
 
-with open('test.csv','r') as dest_f:
+with open('data/test.csv','r') as dest_f:
     data_iter = csv.reader(dest_f, 
                            delimiter = ',', 
                            quotechar = '"')
