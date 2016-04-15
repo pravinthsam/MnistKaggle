@@ -24,8 +24,8 @@ with open('data/train.csv','r') as dest_f:
 train_data_array = np.asarray(data, dtype = 'float64')
 data = None
 
-train_set = (train_data_array[:30000,:-1], np.asarray(train_data_array[:30000,-1], dtype='int8'))
-test_set = (train_data_array[30000:,:-1], np.asarray(train_data_array[30000:,-1], dtype='int8'))
+train_set = (train_data_array[:30000,1:], np.asarray(train_data_array[:30000,0], dtype='int8'))
+test_set = (train_data_array[30000:,1:], np.asarray(train_data_array[30000:,0], dtype='int8'))
 
 
 
@@ -82,7 +82,7 @@ cost = -T.log(likelihood)
 
 gradW, gradB = T.grad(cost, [w, b])
 
-n_iter = 101
+n_iter = 1001
 
 
 

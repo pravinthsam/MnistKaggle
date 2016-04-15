@@ -2,34 +2,55 @@
 """
 Created on Sat Apr  2 01:35:43 2016
 
-@author: pravinth
+@author: Pravinth Samuel
 """
 
 import theano
 import theano.tensor as T
 
-import cPickle, gzip
 import numpy as np
 
 # Load the dataset
-f = gzip.open('mnist.pkl.gz', 'rb')
-train_set, valid_set, test_set = cPickle.load(f)
-f.close()
+print 'Loading data from train.csv...'
+import csv
+with open('data/train.csv','r') as dest_f:
+    data_iter = csv.reader(dest_f, 
+                           delimiter = ',', 
+                           quotechar = '"')
+    data = [data for data in data_iter]
+    data = data[1:]
+    
+train_data_array = np.asarray(data, dtype = 'float64')
+data = None
 
+numRows = train_data_array.shape[0]
+ratioTrain = 1.0
+splitIx = int(ratioTrain*numRows)
 
+train_set = (train_data_array[:splitIx,1:], np.asarray(train_data_array[:splitIx,0], dtype='int8'))
+valid_set = (train_data_array[splitIx:,1:], np.asarray(train_data_array[splitIx:,0], dtype='int8'))
 
-n = train_set[0].shape[0]
-m = train_set[0].shape[1]
+print 'Loading data from test.csv...'
+with open('data/test.csv','r') as dest_f:
+    data_iter = csv.reader(dest_f, 
+                           delimiter = ',', 
+                           quotechar = '"')
+    data = [data for data in data_iter]
+    data = data[1:]
+    
+test_set = np.asarray(data, dtype = 'float64')
+data=None
 
-train_set = (train_set[0][:n],train_set[1][:n])
 
 X, Y = train_set
 
-Y_temp = np.zeros((n,10))
-for i in range(n):
+# ONE HOT ENCODING
+Y_temp = np.zeros((Y.shape[0],10))
+for i in range(Y.shape[0]):
     Y_temp[i,Y[i]] = 1
 Y, Y_temp = Y_temp, None
 
+# Normalizing X and remembering mu and sigma values
 mu = None
 sig = None
 
@@ -44,57 +65,17 @@ def normalize(mat):
 
 X = normalize(X)
 
-x = T.dmatrix("x")
-y = T.dmatrix("y")
-
-w = theano.shared(np.random.randn(m,10)*0.01, name="w")
-
-b = theano.shared(np.zeros(10), name="b")
-
-out_unnormalized = T.exp(T.dot(x,w)+b)
-
-out_normalized = out_unnormalized / (T.sum(out_unnormalized, axis=1, keepdims=True))
-likelihood = T.sum(out_normalized*y)
-
-cost = -T.log(likelihood)
-
-gradW, gradB = T.grad(cost, [w, b])
-
-n_iter = 11
-
-
-
-train = theano.function(inputs = [x, y],
-                        outputs = cost,
-                        updates = [(w, w - 0.01*gradW),(b,b-0.01*gradB)])
-
-predict = theano.function(inputs = [x],
-                          outputs = out_normalized)
-
-def numCorrect1(X,Y):
-    pred = predict(normalize(X))
-    numCorrect = np.sum(np.argmax(pred,axis=1)==Y)
-    return numCorrect
-
-for itern in range(n_iter):
-    c = train(X,Y)
-    
-    if itern%10 == 0:
-        correctTrain = numCorrect1(train_set[0], train_set[1])
-        correctTest = numCorrect1(test_set[0], test_set[1])        
-        print 'cost: ' + str(c) + ' correctTrain: ' + str(correctTrain) + ' correctTest: ' + str(correctTest)
-        
 ## Keras model
 
 from keras.models import Sequential
 from keras.layers.core import Dense, Activation
 
 def numCorrect2(model, X,Y):
-    pred = model.predict_classes(normalize(X), batch_size=100)
+    pred = model.predict_classes(normalize(X), batch_size=10000)
     return np.sum(pred==Y)
 
 def numCorrect3(model, X,Y):
-    pred = model.predict_classes(X, batch_size=100)
+    pred = model.predict_classes(X, batch_size=10000)
     return np.sum(pred==Y)
 
 
@@ -102,15 +83,24 @@ def numCorrect3(model, X,Y):
 def printResults(model, numCorrect):
     correctTrain = numCorrect(model, train_set[0], train_set[1])
     correctVal = numCorrect(model, valid_set[0], valid_set[1])
-    correctTest = numCorrect(model, test_set[0], test_set[1])
     
     print("Training Correct: " + str(correctTrain) +
             " Incorrect: " + str(train_set[0].shape[0]-correctTrain))
     print("Validation Correct: " + str(correctVal) +
             " Incorrect: " + str(valid_set[0].shape[0]-correctVal))
-    print("Test Correct: " + str(correctTest) +
-            " Incorrect: " + str(test_set[0].shape[0]-correctTest))
-'''
+            
+from keras.callbacks import Callback
+class ResultsPrinter(Callback):
+    def __init__(self, m = None):
+        if m is None:
+            self.correctModel = numCorrect2
+        else:
+            self.correctModel = m
+        
+    def on_epoch_end(self, epoch, logs={}):
+        printResults(self.model, self.correctModel)
+        
+        
 mnistModel1 = Sequential()
 mnistModel1.add(Dense(392, input_dim=784, init="glorot_uniform"))
 mnistModel1.add(Activation("relu"))
@@ -121,10 +111,18 @@ mnistModel1.add(Activation("relu"))
 mnistModel1.add(Dense(10, init="glorot_uniform"))
 mnistModel1.add(Activation("softmax"))
 
-mnistModel1.compile(loss="categorical_crossentropy", optimizer="sgd")
-mnistModel1.fit(train_set[0], Y, nb_epoch=5, batch_size=10, show_accuracy=True)
-'''
+mnistModel1.compile(loss="categorical_crossentropy", optimizer="rmsprop")
 
+rp = ResultsPrinter()        
+mnistModel1.fit(X, Y, nb_epoch=15, batch_size=100, show_accuracy=True)
+
+def saveModel(model, name):
+    open('./models/' + name + '.json', 'w').write(model.to_json())
+    model.save_weights('./models/' + name + '_weights.h5', overwrite=True)
+
+saveModel(mnistModel1, 'mnist_simple_DNN_2')
+
+raise Exception('this is the end, my beautiful friend')
 ## ConvNet
 
 from keras.layers import Convolution2D, MaxPooling2D, Flatten
